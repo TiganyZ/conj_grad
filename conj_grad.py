@@ -1,15 +1,16 @@
 import numpy as np
 
 
-
+###########################################################################
+##################    Gradient Evaluations     ############################
 
 def x_d_eps(x1, pm, eps=1e-8):
     return x1 + pm * eps
 
 
-def eval_grad(f, x1, f1=False, evaltype="forward"):
+def eval_grad(f, x1, f1=False, eps=1e-8, evaltype="forward"):
 
-    if  f1 == False:
+    if  f1 is False:
         f1  = f(x1)
     
     if   evaltype == "forward" :
@@ -31,9 +32,10 @@ def eval_grad(f, x1, f1=False, evaltype="forward"):
         f2p = f(x2p)
         f2m = f(x2m)
         g   = (f2p -  f2m) / (2 * eps)
-        
+    print("evalgrad", g)
     return g
-       
+
+
 
 def grad_f(f1, x1, f2, x2):
     """
@@ -59,28 +61,138 @@ def grad_f(f1, x1, f2, x2):
 
         return g_f
 
+def eval_f_df(f, f0, df0, a):
+    if  f0    is False:
+        f0    =  f(a)
+    if  df0   is False:
+        df0   =  eval_grad( f,  a, f1=f0  )
+    return f0, df0
+   
 
-def line_search_wolfe(f0, a_max):
-    ##  This is a line search algorithm to find the best step length a_k_best
+def df(f, x, f1=False, ev_type="forward"):
+    df = np.zeros(x.shape)
+    for i, xi in enumerate(x):
+        df[i] = eval_grad(f, xi, f1=f1, evaltype=ev_type)
+    return df
+
+#########################################################################################
+##################     Curvature and Hessian Evaluations     ############################
+
+def get_hess(f, x, epsi=1e-8, epsj=1e-8):
+    n  = x.shape
+    x0 = x
+    f0 = f(x0)
+    x0 = tuple(x)
+    H = np.zeros((n,n))
+    for i in range(n):
+        x    = np.asarray(x0)
+        xi   = x_d_eps( x0[i],  1. , eps=epsi)
+        x[i] = xi
+        f_ei = f(x)
+        for j in range(n):
+            x    = np.asarray(x0)
+            x[j] = x_d_eps( x[j],  1., eps=epsj )
+            f_ej = f(x)
+            x[i] = xi
+            f_eij= f(x) 
+            H[i][j] = ( f_eij - f_ei - f_ej +  f0 ) / ( epsi * epsj )
+    return H
     
 
+def eval_curv(f, x1, f1=False, evaltype="central"):
 
-def zoom(f, aj, alo=0., ahi=10.,
+    if  f1 is False:
+        f1  = f(x1)
+    
+    if   evaltype == "forward" :
+        ##  Differentiation with forward finite difference met
+        x2 = x_d_eps( x1, 1. )
+        x3 = x_d_eps( x2, 1. )
+        f2 = f(x2)
+        f3 = f(x3)
+        g  = (f3 - 2 * f2 + f1) / eps**2
+
+    elif evaltype == "backward":
+        ##  Do differentiation with backward finite difference method
+        x2 = x_d_eps( x1, -1. )
+        x3 = x_d_eps( x2, -1. )
+        f2 = f(x2)
+        f3 = f(x3)
+        g  = (f1 - 2 * f2 + f3) / eps**2 
+
+    elif evaltype == "central" :
+        ##  Do differentiation with central finite difference method
+        x2p = x_d_eps( x1,  1. )
+        x2m = x_d_eps( x1, -1. )        
+        f2p = f(x2p)
+        f2m = f(x2m)
+        g   = (f2p  -  2 * f1  +  f2m) /  eps**2
+        
+    return g
+
+
+
+
+##################################################################################
+############################    Line Search     ##################################
+
+def line_search_wolfe(f, xk, pk, a_max, f0   = False, df0   = False,
+                                        f1   = False, f_alo = False,
+                                        c1   = 1e-4,  c2    = 0.9,  eps=1e-8, maxit=100):
+    ##  This is a line search algorithm to find the best step length a_k_best
+    a0 = 0.
+    aj = 1.
+    
+    f0, df0 = eval_f_df(f, f0, df0, xk + a0*pk )
+    ajm   = a0
+    f_ajm = f0
+    f_aj  = f(xk + aj*pk)
+    a_st  = False
+
+    print(f0, f_ajm, f_aj)
+    for i in range(maxit):
+        cond = (f_aj  > f0  +  c1 * aj * df0) or ( f_aj > f_ajm )
+
+        if cond:
+            a_st = ( ajm + aj ) / 2.
+            a_st = zoom(f, xk, a_st, pk, alo=ajm, ahi=aj)
+
+        else:
+            df_aj = eval_grad(f, xj + aj*pk, f1=f_aj)
+            if abs(df_aj) <= - c2 * df0:
+                a_st = aj
+            if df_aj > 0.:
+                a_st = ( ajm + aj ) / 2.
+                a_st = zoom(f, xk, a_st, pk, alo=a0, ahi=a1)
+        aj   = (aj + a_max) / 2.
+        fajm = f_aj
+        f_aj = f( xk +  aj * pk )
+        df0  = df_aj        
+        if a_st is not False:
+            return a_st
+        if i == maxit -1:
+            print("Hit the maximum number of iterations %s for the line search" %(maxit))
+            print("Setting a_st = %s" %(aj))
+            return a_st
+
+
+
+def zoom(f, xk, aj, pk, alo=0., ahi=10.,
             f0   = False, df0   = False,
             f_aj = False, f_alo = False,
-            c1   = 0.25,  c2    = 0.5,  eps=1e-8, maxit=100):
+            c1   = 1e-4,  c2    = 0.9,  eps=1e-8, maxit=100):
     """
     Interpolate (using quadratic, cubic, or bisection) to find
     a trial step length a_j between a_lo and a_hi
     """
-    if  f0    == False:
-        f0    =  f(0)
-    if  df0   == False:
-        df0   =  eval_grad( f,  0, f1=f0  )
-    if  f_aj  == False:
-        f_aj  =  f(aj)
-    if  f_alo == False:
-        f_alo =  f(alo)
+    if  f0    is False:
+        f0    =  f(xj)
+    if  df0   is False:
+        df0   =  eval_grad( f, xk, f1=f0 )
+    if  f_aj  is False:
+        f_aj  =  f(xk + aj*pk )
+    if  f_alo is False:
+        f_alo =  f(xk + alo*pk)
 
     ast = False
     for i in range(maxit):
@@ -89,13 +201,13 @@ def zoom(f, aj, alo=0., ahi=10.,
         if cond:
             ahi = aj
         else:
-            df_aj = eval_grad(f,aj,f1=f_aj)
+            df_aj = eval_grad(f, xk + aj*pk, f1=f_aj)
             if abs(df_aj) <= -c2 * df0:
                 ast = aj
-            if df_aj * (ahi - alo) >= 0.:
+            if df_aj * (ahi - alo) >= 0:
                 ahi = alo
             alo = aj
-        if ast != False:
+        if ast is not False:
             break
         if i == maxit - 1:
             print("Warning: Maximum number of iterations for finding step length has been exceeded.")
@@ -104,21 +216,62 @@ def zoom(f, aj, alo=0., ahi=10.,
     return ast
 
 
-    
-
-def conj_grad(p0, g0, mx_it):
-
-    ## h0 == g0 initially
-
-    h = g0
-    a_k = - ( np.dot(r_k, p_k) / np.dot(pk, ( np.dot(A, p_k) )))
- 
-    for i in range(mx_it):
-        hnp1 =
-
 
         
-    """
+
+###########################################################################
+##################     Conjugate Gradient      ############################
+
+def fr_cg(f, xk, a_max=100., maxiter=100, tol=1e-5, fr=True, c1 =1e-4, c2=0.4, eps=1e-8):
+    fk  = f(xk)
+    dfk = df(f, xk, f1=fk)
+    pk  = -dfk
+    for i in range(maxiter):
+        ak   = line_search_wolfe(f, xk, pk, a_max, f0=fk, df0=dfk, maxit=maxiter, c1=c1, c2=c2, eps=eps)
+        xk1  = xk  +  ak * pk
+        dfk1 = df(f, xk1)        
+        if fr:
+            print("Fletcher-Reeves Conjugate gradient: Iteration %s" %(i) )
+            bk1  = ( dfk1.dot(dfk1) ) / ( dfk.dot(dfk)  )
+        else:
+            print("Polak-Ribere Conjugate gradient:    Iteration %s" %(i) )
+            bk1  = ( dfk1.dot(dfk1-dfk) ) / ( dfk.dot(dfk)  )
+        print("    xk = %s" (xk))
+        print("    xk1 = %s\n" (xk1))
+        pk  = -dfk1 + bk1 * pk
+        xk  = xk1
+        fk  = f(xk)        
+        dfk = dfk1
+
+        if np.all(dfk1 < tol):
+            break
+    return xk
+        
+        
+
+def linear_cg( A, x_k, b, tol=1e-5):
+    #This solves the equation Ax = b
+    r_k = A.dot(x_k) - b
+    p_k = -r_k
+    while np.all(r_k > tol):
+        a_k = ( r_k.dot(p_k) )/( p_k.dot( A.dot( p_k ) ) )
+        x_k += a_k * p_k
+        r_kp1 = r_k + a_k * A.dot( p_k )
+        beta_k = r_kp1.dot(r_kp1)/r_k.dot(r_k)
+        p_k = -r_kp1 + beta_k*p_k 
+        r_k = r_kp1
+    return x_k
+
+
+def testf(x):
+    tf = np.sum( (x-8)**2)
+    return tf
+
+xk = np.array([1,2,3])
+fr_cg(testf, xk)
+
+        
+"""
 ############     From BOP   ##########
             
             gg = sum(ftot(:,:nd)*ftot(:,:nd))
