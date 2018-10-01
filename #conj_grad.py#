@@ -296,9 +296,12 @@ def testf(x):
     tf = np.sum((x-6)*(x-6))
     return tf
 
-xk = np.array([1,2,3])
-eps = 1e-5
-fr_cg(testf, xk, eps=eps)
+
+#######################################################################
+##########    Test Script    #########################################
+# xk = np.array([1,2,3])
+# eps = 1e-5
+# fr_cg(testf, xk, eps=eps)
 
         
 """
