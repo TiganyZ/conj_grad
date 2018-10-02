@@ -8,8 +8,8 @@ def x_d_eps(x1, pm, eps=1e-8):
     return x1 + pm * eps
 
 
-def eval_grad(f, x1, f1=False, eps=1e-8, evaltype="forward", direction=False, alpha=1.):
-    #print("eps", eps)
+def eval_grad(f, x1, f1=False, eps=1e-8, evaltype="forward", direction=False, alpha=1., component=False):
+    x0 = tuple(x1)
     if  f1 is False:
         if direction is not False:
             f1 = f(x1 + alpha * direction)
@@ -17,8 +17,12 @@ def eval_grad(f, x1, f1=False, eps=1e-8, evaltype="forward", direction=False, al
             f1 = f(x1)
     
     if   evaltype == "forward" :
-        ##  Differentiation with forward finite difference met
-        x2 = x_d_eps( x1, 1., eps=eps )
+        ##  Differentiation with forward finite difference method
+        if component is not False:
+            x1[component] = x_d_eps( x1[component], 1., eps=eps )
+            x2 = x1
+        else:
+            x2 = x_d_eps( x1, 1., eps=eps )
         if direction is not False:
             alpha2 = x_d_eps(alpha, 1., eps=eps)
             f2 = f( x1 + alpha2 * direction )
@@ -30,7 +34,10 @@ def eval_grad(f, x1, f1=False, eps=1e-8, evaltype="forward", direction=False, al
 
     elif evaltype == "backward":
         ##  Do differentiation with backward finite difference method
-        x2 = x_d_eps( x1, -1., eps=eps )
+        if component is not False:
+            x1[component] = x_d_eps( x1[component], -1., eps=eps )
+        else:
+            x2 = x_d_eps( x1, -1., eps=eps )
         if direction is not False:
             alpha2 = x_d_eps(alpha, -1., eps=eps)
             f2 = f( x1 + alpha2 * direction )
@@ -39,9 +46,17 @@ def eval_grad(f, x1, f1=False, eps=1e-8, evaltype="forward", direction=False, al
         g  = (f1 - f2) / eps
 
     elif evaltype == "central" :
-        ##  Do differentiation with central finite difference method        
-        x2p = x_d_eps( x1,  1., eps=eps )
-        x2m = x_d_eps( x1, -1., eps=eps )
+        ##  Do differentiation with central finite difference method
+        if component is not False:
+            x1 = np.asarray(x0)
+            x1[component] = x_d_eps( x1[component], 1., eps=eps )
+            x2p = x1
+            x1 = np.asarray(x0)
+            x1[component] = x_d_eps( x1[component], -1., eps=eps )
+            x2m = x1
+        else:
+            x2p = x_d_eps( x1,  1., eps=eps )
+            x2m = x_d_eps( x1, -1., eps=eps )
         if direction is not False:
             alphap = x_d_eps(alpha, 1., eps=eps)
             alpham = x_d_eps(alpha, -1., eps=eps)
@@ -91,7 +106,7 @@ def eval_f_df(f, f0, df0, a):
 def df(f, x, f1=False, ev_type="forward", eps=1e-8):
     df = np.zeros(x.shape)
     for i, xi in enumerate(x):
-        df[i] = eval_grad(f, xi, f1=f1, evaltype=ev_type, eps=eps)
+        df[i] = eval_grad(f, x, f1=f1, evaltype=ev_type, eps=eps, component=i)
     return df
 
 #########################################################################################
@@ -160,7 +175,7 @@ def line_search_wolfe(f, xk, pk, a_max, f0   = False, df0   = False,
                                         c1   = 1e-4,  c2    = 0.9,  eps=1e-8, maxit=100):
     ##  This is a line search algorithm to find the best step length a_k_best
     a0 = 0.
-    aj = 1.
+    aj = (a_max + a0) /2.
     
     f0    = f(xk)
     ajm   = a0
@@ -249,6 +264,7 @@ def zoom(f, xk, aj, pk, alo=0., ahi=10.,
 
 def fr_cg(f, xk, a_max=10., maxiter=100, tol=1e-5, fr=True, c1 =1e-4, c2=0.4, eps=1e-8):
     fk  = f(xk)
+    print("First fk", fk)
     dfk = df(f, xk, f1=fk, eps=eps)
     print("df0 = %s"%(dfk))
     pk  = -dfk
@@ -296,9 +312,9 @@ def testf(x):
     tf = np.sum((x-6)*(x-6))
     return tf
 
-xk = np.array([1,2,3])
-eps = 1e-5
-fr_cg(testf, xk, eps=eps)
+#xk = np.array([1,2,3])
+#eps = 1e-5
+#fr_cg(testf, xk, eps=eps)
 
         
 """

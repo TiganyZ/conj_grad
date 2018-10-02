@@ -258,14 +258,14 @@ def fr_cg(f, xk, a_max=10., maxiter=100, tol=1e-5, fr=True, c1 =1e-4, c2=0.4, ep
         xk1  = xk  +  ak * pk
         dfk1 = df(f, xk1, eps=eps)        
         if fr:
-            print("\n\nFletcher-Reeves Conjugate gradient: Iteration %s" %(i) )
+            print("\n\n Fletcher-Reeves Conjugate gradient: Iteration %s" %(i) )
             bk1  = ( dfk1.dot(dfk1) ) / ( dfk.dot(dfk)  )
         else:
-            print("Polak-Ribere Conjugate gradient:    Iteration %s" %(i) )
+            print("\n\n Polak-Ribere Conjugate gradient:    Iteration %s" %(i) )
             bk1  = ( dfk1.dot(dfk1-dfk) ) / ( dfk.dot(dfk)  )
-        print("    bk1 = %s" %(bk1))            
-        print("    xk = %s" %(xk))
-        print("    xk1 = %s\n" %(xk1))
+        #print("    bk1 = %s" %(bk1))            
+        #print("    xk = %s" %(xk))
+        #print("    xk1 = %s\n" %(xk1))
         pk  = -dfk1 + bk1 * pk
         xk  = xk1
         fk  = f(xk)        
@@ -302,6 +302,10 @@ def testf(x):
 # xk = np.array([1,2,3])
 # eps = 1e-5
 # fr_cg(testf, xk, eps=eps)
+
+
+
+
 
         
 """
